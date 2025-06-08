@@ -1,0 +1,111 @@
+---
+title: "SITUACION PROBLEMA"
+author: "Jose Francisco Gonzalez Ortega y Diego Garcia Cervantes"
+date: "2025-06-07"
+output:
+  html_document:
+    df_print: paged
+---
+
+## TABLA DE CODONES
+
+```{r}
+trad = c(
+  UUU = "F", UUC = "F", UUA = "L", UUG = "L",
+  CUU = "L", CUC = "L", CUA = "L", CUG = "L",
+  AUU = "I", AUC = "I", AUA = "I", AUG = "M",
+  GUU = "V", GUC = "V", GUA = "V", GUG = "V",
+  UCU = "S", UCC = "S", UCA = "S", UCG = "S",
+  CCU = "P", CCC = "P", CCA = "P", CCG = "P",
+  ACU = "T", ACC = "T", ACA = "T", ACG = "T",
+  GCU = "A", GCC = "A", GCA = "A", GCG = "A",
+  UAU = "Y", UAC = "Y", UAA = "*", UAG = "*",
+  CAU = "H", CAC = "H", CAA = "Q", CAG = "Q",
+  AAU = "N", AAC = "N", AAA = "K", AAG = "K",
+  GAU = "D", GAC = "D", GAA = "E", GAG = "E",
+  UGU = "C", UGC = "C", UGA = "*", UGG = "W",
+  CGU = "R", CGC = "R", CGA = "R", CGG = "R",
+  AGU = "S", AGC = "S", AGA = "R", AGG = "R",
+  GGU = "G", GGC = "G", GGA = "G", GGG = "G"
+)
+```
+
+
+### PRIMERA VARIANTE: SECUENCIA DE REFERENCIA: 2019
+```{r}
+library(seqinr)
+file = read.fasta("sequences.fasta", forceDNAtolower = FALSE)
+file2 = read.fasta("omicron.fasta", forceDNAtolower = FALSE)
+```
+
+## CODIGO MUTACIONES
+```{r}
+
+datos <- data.frame(Mutacion=character(),
+                    CambioCodon=character(),
+                    CambioAmino=character(),
+                    PosicionCodon=integer(),
+                    Gen=character(),
+                    stringsAsFactors=FALSE)
+
+nMut=1
+for (i in seq_along(file)){
+  if (i == 2) next
+  gen <- file[[i]]
+  info <- attr(gen, "Annot")
+  info <- unlist(strsplit(info, "\\[|\\]|:|=|\\."))  # divide la anotación
+  gene <- info[which(info == "gene") + 1]
+  cat ("Gen", i, gene, "\n")
+  gen[which(gen == "T")] <- "U"
+  cat("Total de nucleótidos (Wuhan):", length(gen), "\n")
+  
+  for (j in seq(i, length(file2), 12)){
+    gen2 <- file2[[j]]
+    gen2[which(gen2 == "T")] <- "U"
+    
+    if (length(gen) == length(gen2)){
+      diff <- which(gen != gen2)
+      if (length(diff) > 0){ 
+        cat("Se encontraron mutaciones en las posiciones:", diff, "\n")
+        prevMut <- ""
+        for (pos in diff){
+          ini <- pos - (pos - 1) %% 3
+          
+          # Control de rangos
+          if ((ini + 2) > length(gen) || (ini + 2) > length(gen2)) next
+          
+          codOri <- paste(gen[ini], gen[ini+1], gen[ini+2], sep = "")
+          codMut <- paste(gen2[ini], gen2[ini+1], gen2[ini+2], sep = "")
+          codonChange <- paste(codOri, "to", codMut, sep = "")
+          mutacion <- paste(gen[pos], "to", gen2[pos], sep = "")
+          nCod <- ((pos - 1) %/% 3) + 1
+          
+          if (!is.na(trad[codMut]) && trad[codOri] != trad[codMut] && prevMut != paste(trad[codOri], nCod, trad[codMut], sep = "")){
+            aminoChange <- paste(trad[codOri], nCod, trad[codMut], sep = "")
+            cat(mutacion, codonChange, aminoChange, nCod, gene, "\n")
+            fila <- list(mutacion, codonChange, aminoChange, nCod, gene)
+            if (all(lengths(fila) == 1)) {
+              datos[nMut, ] <- fila
+              nMut <- nMut + 1
+            }
+            prevMut <- aminoChange
+          }
+        }
+      }
+    }
+  }
+}
+
+# Gráfica con nombres reales de genes
+datos$Gen <- factor(datos$Gen, levels = names(sort(table(datos$Gen), decreasing = TRUE)))
+
+ggplot(datos, aes(x = Gen)) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Mutaciones no sinónimas por gen (Año 2021)",
+       y = "Número de mutaciones",
+       x = "Gen") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold", hjust = 0.5))
+
+```
