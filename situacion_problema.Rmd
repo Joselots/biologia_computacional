@@ -3,6 +3,7 @@ title: "SITUACION PROBLEMA"
 author: "Jose Francisco Gonzalez Ortega y Diego Garcia Cervantes"
 date: "2025-06-07"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -30,65 +31,105 @@ trad = c(
 )
 ```
 
+## CODIGO MUTACIONES
 
-### PRIMERA VARIANTE: SECUENCIA DE REFERENCIA: 2019
+
+
 ```{r}
 library(seqinr)
-file = read.fasta("sequences.fasta", forceDNAtolower = FALSE)
-file2 = read.fasta("omicron.fasta", forceDNAtolower = FALSE)
-```
+library(dplyr)
+library(ggplot2)
 
-## CODIGO MUTACIONES
-```{r}
+# Tabla de traducción
+trad = c(
+  UUU="F", UUC="F", UUA="L", UUG="L",
+  UCU="S", UCC="S", UCA="S", UCG="S",
+  UAU="Y", UAC="Y", UAA="STOP", UAG="STOP",
+  UGU="C", UGC="C", UGA="STOP", UGG="W",
+  CUU="L", CUC="L", CUA="L", CUG="L",
+  CCU="P", CCC="P", CCA="P", CCG="P",
+  CAU="H", CAC="H", CAA="Q", CAG="Q",
+  CGU="R", CGC="R", CGA="R", CGG="R",
+  AUU="I", AUC="I", AUA="I", AUG="M",
+  ACU="T", ACC="T", ACA="T", ACG="T",
+  AAU="N", AAC="N", AAA="K", AAG="K",
+  AGU="S", AGC="S", AGA="R", AGG="R",
+  GUU="V", GUC="V", GUA="V", GUG="V",
+  GCU="A", GCC="A", GCA="A", GCG="A",
+  GAU="D", GAC="D", GAA="E", GAG="E",
+  GGU="G", GGC="G", GGA="G", GGG="G"
+)
 
-datos <- data.frame(Mutacion=character(),
-                    CambioCodon=character(),
-                    CambioAmino=character(),
-                    PosicionCodon=integer(),
-                    Gen=character(),
-                    stringsAsFactors=FALSE)
+# Cargar Wuhan
+file <- read.fasta("sequence.txt", forceDNAtolower = FALSE)
 
-nMut=1
-for (i in seq_along(file)){
-  if (i == 2) next
-  gen <- file[[i]]
-  info <- attr(gen, "Annot")
-  info <- unlist(strsplit(info, "\\[|\\]|:|=|\\."))  # divide la anotación
-  gene <- info[which(info == "gene") + 1]
-  cat ("Gen", i, gene, "\n")
-  gen[which(gen == "T")] <- "U"
-  cat("Total de nucleótidos (Wuhan):", length(gen), "\n")
+# Archivos por año
+archivos <- c("omicron2019.fasta", "omicron2022.fasta", "omicron2023.fasta", "omicron2024.fasta")
+años <- c(2021, 2022, 2023, 2024)
+
+# Dataframe para todos los años
+datos <- data.frame(
+  mutacion = character(),
+  cambioCodon = character(),
+  cambioAmino = character(),
+  pos = integer(),
+  gen = character(),
+  año = integer(),
+  stringsAsFactors = FALSE
+)
+
+# Loop por año y archivo
+for (k in seq_along(archivos)) {
+  file2 <- read.fasta(archivos[k], forceDNAtolower = FALSE)
+  año_actual <- años[k]
+  cat("\nAnalizando año", año_actual, "con", length(file2)/12, "secuencias...\n")
   
-  for (j in seq(i, length(file2), 12)){
-    gen2 <- file2[[j]]
-    gen2[which(gen2 == "T")] <- "U"
+  for (i in seq_along(file)) {
+    if (i == 2) next
+    gen <- file[[i]]
+    info <- attr(gen, "Annot")
+    info <- unlist(strsplit(info, "\\[|\\]|:|=|\\."))  
+    gene <- info[which(info == "gene") + 1]
     
-    if (length(gen) == length(gen2)){
-      diff <- which(gen != gen2)
-      if (length(diff) > 0){ 
-        cat("Se encontraron mutaciones en las posiciones:", diff, "\n")
-        prevMut <- ""
-        for (pos in diff){
-          ini <- pos - (pos - 1) %% 3
-          
-          # Control de rangos
-          if ((ini + 2) > length(gen) || (ini + 2) > length(gen2)) next
-          
-          codOri <- paste(gen[ini], gen[ini+1], gen[ini+2], sep = "")
-          codMut <- paste(gen2[ini], gen2[ini+1], gen2[ini+2], sep = "")
-          codonChange <- paste(codOri, "to", codMut, sep = "")
-          mutacion <- paste(gen[pos], "to", gen2[pos], sep = "")
-          nCod <- ((pos - 1) %/% 3) + 1
-          
-          if (!is.na(trad[codMut]) && trad[codOri] != trad[codMut] && prevMut != paste(trad[codOri], nCod, trad[codMut], sep = "")){
-            aminoChange <- paste(trad[codOri], nCod, trad[codMut], sep = "")
-            cat(mutacion, codonChange, aminoChange, nCod, gene, "\n")
-            fila <- list(mutacion, codonChange, aminoChange, nCod, gene)
-            if (all(lengths(fila) == 1)) {
-              datos[nMut, ] <- fila
-              nMut <- nMut + 1
+    gen[gen == "T"] <- "U"
+    
+    for (j in seq(i, length(file2), 12)) {
+      gen2 <- file2[[j]]
+      gen2[gen2 == "T"] <- "U"
+      
+      if (length(gen) == length(gen2)) {
+        diff <- which(gen != gen2)
+        if (length(diff) > 0) {
+          prevMut <- ""
+          for (pos in diff) {
+            ini <- pos - (pos - 1) %% 3
+            if ((ini + 2) > length(gen)) next
+            
+            codOri <- paste(gen[ini], gen[ini+1], gen[ini+2], sep = "")
+            codMut <- paste(gen2[ini], gen2[ini+1], gen2[ini+2], sep = "")
+            mutacion <- paste(gen[pos], "to", gen2[pos], sep = "")
+            codonChange <- paste(codOri, "to", codMut, sep = "")
+            nCod <- ((pos - 1) %/% 3) + 1
+            
+            if (!is.na(trad[codMut]) && trad[codOri] != trad[codMut] &&
+                prevMut != paste(trad[codOri], nCod, trad[codMut], sep = "")) {
+              
+              aminoChange <- paste(trad[codOri], nCod, trad[codMut], sep = "")
+              
+                fila <- data.frame(
+                  mutacion = mutacion,
+                  cambioCodon = codonChange,
+                  cambioAmino = aminoChange,
+                  pos = nCod,
+                  gen = gene,
+                  año = año_actual,
+                  stringsAsFactors = FALSE
+                )              
+                if (all(lengths(fila) == 1)) {
+                datos <- rbind(datos, fila)
+              }
+              prevMut <- aminoChange
             }
-            prevMut <- aminoChange
           }
         }
       }
@@ -96,16 +137,600 @@ for (i in seq_along(file)){
   }
 }
 
-# Gráfica con nombres reales de genes
-datos$Gen <- factor(datos$Gen, levels = names(sort(table(datos$Gen), decreasing = TRUE)))
 
-ggplot(datos, aes(x = Gen)) +
-  geom_bar(fill = "steelblue") +
-  labs(title = "Mutaciones no sinónimas por gen (Año 2021)",
-       y = "Número de mutaciones",
-       x = "Gen") +
+vs_total <- length(file2)/12  # o puedes calcular por año
+
+dfgraph <- datos %>%
+  group_by(año, cambioAmino) %>%
+  summarise(
+    mutacion = first(mutacion),
+    cambioCodon = first(cambioCodon),
+    pos = first(pos),
+    gen = first(gen),
+    cuenta = n(),
+    .groups = "drop"
+  ) %>%
+  filter(cuenta > as.integer(vs_total * 0.1))
+
+
+dfgraph_top <- dfgraph %>%
+  group_by(año, gen) %>%
+  slice_max(order_by = cuenta, n = 2, with_ties = FALSE) %>%
+  ungroup()
+
+dfgraph_top$cambioAmino <- factor(
+  dfgraph_top$cambioAmino,
+  levels = unique(dfgraph_top$cambioAmino[order(-dfgraph_top$cuenta)])
+)
+
+
+ggplot(dfgraph_top, aes(x = cambioAmino, y = cuenta, fill = gen, label = cuenta)) +
+  geom_bar(stat = "identity") +
+  geom_text(stat = "identity", vjust = 1.5, size = 3) +
+  facet_wrap(~ año, scales = "free_x") +
+  ggtitle("Top 5 mutaciones no sinónimas por gen y por año") +
+  labs(x = "Cambio de aminoácido", y = "Frecuencia", fill = "Gen") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+library(dplyr)
+library(ggplot2)
+
+# 1. Define grupos de genes
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1ab", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF10")
+
+# 2. Crea una nueva columna en tu data `datos` con el tipo de gen
+datos <- datos %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ "Otro"
+  ))
+
+# 3. Contar mutaciones no sinónimas por grupo y año
+resumen <- datos %>%
+  group_by(año, grupo) %>%
+  summarise(mutaciones = n(), .groups = "drop")
+
+# 4. Gráfica comparativa tipo informe
+ggplot(resumen, aes(x = factor(año), y = mutaciones, fill = grupo, label = mutaciones)) +
+  geom_col(position = "dodge") +
+  geom_text(position = position_dodge(0.9), vjust = -0.25, size = 4) +
+  labs(title = "Mutaciones no sinónimas por grupo de genes en Ómicron (2021–2024)",
+       x = "Año", y = "Número de mutaciones", fill = "Tipo de gen") +
   theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold", hjust = 0.5))
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+omicron <- datos  # o como hayas llamado al resultado para Ómicron
+omicron$variante <- "Ómicron"
 
 ```
+
+
+```{r}
+library(seqinr)
+library(dplyr)
+library(ggplot2)
+
+# Tabla de traducción
+trad = c(
+  UUU="F", UUC="F", UUA="L", UUG="L",
+  UCU="S", UCC="S", UCA="S", UCG="S",
+  UAU="Y", UAC="Y", UAA="STOP", UAG="STOP",
+  UGU="C", UGC="C", UGA="STOP", UGG="W",
+  CUU="L", CUC="L", CUA="L", CUG="L",
+  CCU="P", CCC="P", CCA="P", CCG="P",
+  CAU="H", CAC="H", CAA="Q", CAG="Q",
+  CGU="R", CGC="R", CGA="R", CGG="R",
+  AUU="I", AUC="I", AUA="I", AUG="M",
+  ACU="T", ACC="T", ACA="T", ACG="T",
+  AAU="N", AAC="N", AAA="K", AAG="K",
+  AGU="S", AGC="S", AGA="R", AGG="R",
+  GUU="V", GUC="V", GUA="V", GUG="V",
+  GCU="A", GCC="A", GCA="A", GCG="A",
+  GAU="D", GAC="D", GAA="E", GAG="E",
+  GGU="G", GGC="G", GGA="G", GGG="G"
+)
+
+# Cargar Wuhan
+file <- read.fasta("sequence.txt", forceDNAtolower = FALSE)
+
+# Archivos por año
+archivos <- c("delta2021.fasta", "delta2022.fasta", "delta2023.fasta", "delta2024.fasta")
+años <- c(2021, 2022, 2023, 2024)
+
+# Dataframe para todos los años
+datos <- data.frame(
+  mutacion = character(),
+  cambioCodon = character(),
+  cambioAmino = character(),
+  pos = integer(),
+  gen = character(),
+  año = integer(),
+  stringsAsFactors = FALSE
+)
+
+# Loop por año y archivo
+for (k in seq_along(archivos)) {
+  file2 <- read.fasta(archivos[k], forceDNAtolower = FALSE)
+  año_actual <- años[k]
+  cat("\nAnalizando año", año_actual, "con", length(file2)/12, "secuencias...\n")
+  
+  for (i in seq_along(file)) {
+    if (i == 2) next
+    gen <- file[[i]]
+    info <- attr(gen, "Annot")
+    info <- unlist(strsplit(info, "\\[|\\]|:|=|\\."))  
+    gene <- info[which(info == "gene") + 1]
+    
+    gen[gen == "T"] <- "U"
+    
+    for (j in seq(i, length(file2), 12)) {
+      gen2 <- file2[[j]]
+      gen2[gen2 == "T"] <- "U"
+      
+      if (length(gen) == length(gen2)) {
+        diff <- which(gen != gen2)
+        if (length(diff) > 0) {
+          prevMut <- ""
+          for (pos in diff) {
+            ini <- pos - (pos - 1) %% 3
+            if ((ini + 2) > length(gen)) next
+            
+            codOri <- paste(gen[ini], gen[ini+1], gen[ini+2], sep = "")
+            codMut <- paste(gen2[ini], gen2[ini+1], gen2[ini+2], sep = "")
+            mutacion <- paste(gen[pos], "to", gen2[pos], sep = "")
+            codonChange <- paste(codOri, "to", codMut, sep = "")
+            nCod <- ((pos - 1) %/% 3) + 1
+            
+            if (!is.na(trad[codMut]) && trad[codOri] != trad[codMut] &&
+                prevMut != paste(trad[codOri], nCod, trad[codMut], sep = "")) {
+              
+              aminoChange <- paste(trad[codOri], nCod, trad[codMut], sep = "")
+              
+                fila <- data.frame(
+                  mutacion = mutacion,
+                  cambioCodon = codonChange,
+                  cambioAmino = aminoChange,
+                  pos = nCod,
+                  gen = gene,
+                  año = año_actual,
+                  stringsAsFactors = FALSE
+                )              
+                if (all(lengths(fila) == 1)) {
+                datos <- rbind(datos, fila)
+              }
+              prevMut <- aminoChange
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+vs_total <- length(file2)/12  # o puedes calcular por año
+
+dfgraph <- datos %>%
+  group_by(año, cambioAmino) %>%
+  summarise(
+    mutacion = first(mutacion),
+    cambioCodon = first(cambioCodon),
+    pos = first(pos),
+    gen = first(gen),
+    cuenta = n(),
+    .groups = "drop"
+  ) %>%
+  filter(cuenta > as.integer(vs_total * 0.1))
+
+
+dfgraph_top <- dfgraph %>%
+  group_by(año, gen) %>%
+  slice_max(order_by = cuenta, n = 2, with_ties = FALSE) %>%
+  ungroup()
+
+dfgraph_top$cambioAmino <- factor(
+  dfgraph_top$cambioAmino,
+  levels = unique(dfgraph_top$cambioAmino[order(-dfgraph_top$cuenta)])
+)
+
+
+ggplot(dfgraph_top, aes(x = cambioAmino, y = cuenta, fill = gen, label = cuenta)) +
+  geom_bar(stat = "identity") +
+  geom_text(stat = "identity", vjust = 1.5, size = 3) +
+  facet_wrap(~ año, scales = "free_x") +
+  ggtitle("Top 5 mutaciones no sinónimas por gen y por año") +
+  labs(x = "Cambio de aminoácido", y = "Frecuencia", fill = "Gen") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+library(dplyr)
+library(ggplot2)
+
+# 1. Define grupos de genes
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1ab", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF10")
+
+# 2. Crea una nueva columna en tu data `datos` con el tipo de gen
+datos <- datos %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ "Otro"
+  ))
+
+# 3. Contar mutaciones no sinónimas por grupo y año
+resumen <- datos %>%
+  group_by(año, grupo) %>%
+  summarise(mutaciones = n(), .groups = "drop")
+
+# 4. Gráfica comparativa tipo informe
+ggplot(resumen, aes(x = factor(año), y = mutaciones, fill = grupo, label = mutaciones)) +
+  geom_col(position = "dodge") +
+  geom_text(position = position_dodge(0.9), vjust = -0.25, size = 4) +
+  labs(title = "Mutaciones no sinónimas por grupo de genes en Delta (2021–2024)",
+       x = "Año", y = "Número de mutaciones", fill = "Tipo de gen") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+
+delta <- datos  # reemplazas 'datos' con el que corresponda
+delta$variante <- "Delta"
+
+```
+
+```{r}
+library(seqinr)
+library(dplyr)
+library(ggplot2)
+
+# Tabla de traducción
+trad = c(
+  UUU="F", UUC="F", UUA="L", UUG="L",
+  UCU="S", UCC="S", UCA="S", UCG="S",
+  UAU="Y", UAC="Y", UAA="STOP", UAG="STOP",
+  UGU="C", UGC="C", UGA="STOP", UGG="W",
+  CUU="L", CUC="L", CUA="L", CUG="L",
+  CCU="P", CCC="P", CCA="P", CCG="P",
+  CAU="H", CAC="H", CAA="Q", CAG="Q",
+  CGU="R", CGC="R", CGA="R", CGG="R",
+  AUU="I", AUC="I", AUA="I", AUG="M",
+  ACU="T", ACC="T", ACA="T", ACG="T",
+  AAU="N", AAC="N", AAA="K", AAG="K",
+  AGU="S", AGC="S", AGA="R", AGG="R",
+  GUU="V", GUC="V", GUA="V", GUG="V",
+  GCU="A", GCC="A", GCA="A", GCG="A",
+  GAU="D", GAC="D", GAA="E", GAG="E",
+  GGU="G", GGC="G", GGA="G", GGG="G"
+)
+
+# Cargar Wuhan
+file <- read.fasta("sequence.txt", forceDNAtolower = FALSE)
+
+# Archivos por año
+archivos <- c("alfa2020.fasta", "alfa2021.fasta")
+años <- c(2020, 2021)
+
+# Dataframe para todos los años
+datos <- data.frame(
+  mutacion = character(),
+  cambioCodon = character(),
+  cambioAmino = character(),
+  pos = integer(),
+  gen = character(),
+  año = integer(),
+  stringsAsFactors = FALSE
+)
+
+# Loop por año y archivo
+for (k in seq_along(archivos)) {
+  file2 <- read.fasta(archivos[k], forceDNAtolower = FALSE)
+  año_actual <- años[k]
+  cat("\nAnalizando año", año_actual, "con", length(file2)/12, "secuencias...\n")
+  
+  for (i in seq_along(file)) {
+    if (i == 2) next
+    gen <- file[[i]]
+    info <- attr(gen, "Annot")
+    info <- unlist(strsplit(info, "\\[|\\]|:|=|\\."))  
+    gene <- info[which(info == "gene") + 1]
+    
+    gen[gen == "T"] <- "U"
+    
+    for (j in seq(i, length(file2), 12)) {
+      gen2 <- file2[[j]]
+      gen2[gen2 == "T"] <- "U"
+      
+      if (length(gen) == length(gen2)) {
+        diff <- which(gen != gen2)
+        if (length(diff) > 0) {
+          prevMut <- ""
+          for (pos in diff) {
+            ini <- pos - (pos - 1) %% 3
+            if ((ini + 2) > length(gen)) next
+            
+            codOri <- paste(gen[ini], gen[ini+1], gen[ini+2], sep = "")
+            codMut <- paste(gen2[ini], gen2[ini+1], gen2[ini+2], sep = "")
+            mutacion <- paste(gen[pos], "to", gen2[pos], sep = "")
+            codonChange <- paste(codOri, "to", codMut, sep = "")
+            nCod <- ((pos - 1) %/% 3) + 1
+            
+            if (!is.na(trad[codMut]) && trad[codOri] != trad[codMut] &&
+                prevMut != paste(trad[codOri], nCod, trad[codMut], sep = "")) {
+              
+              aminoChange <- paste(trad[codOri], nCod, trad[codMut], sep = "")
+              
+                fila <- data.frame(
+                  mutacion = mutacion,
+                  cambioCodon = codonChange,
+                  cambioAmino = aminoChange,
+                  pos = nCod,
+                  gen = gene,
+                  año = año_actual,
+                  stringsAsFactors = FALSE
+                )              
+                if (all(lengths(fila) == 1)) {
+                datos <- rbind(datos, fila)
+              }
+              prevMut <- aminoChange
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+vs_total <- length(file2)/12  # o puedes calcular por año
+
+dfgraph <- datos %>%
+  group_by(año, cambioAmino) %>%
+  summarise(
+    mutacion = first(mutacion),
+    cambioCodon = first(cambioCodon),
+    pos = first(pos),
+    gen = first(gen),
+    cuenta = n(),
+    .groups = "drop"
+  ) %>%
+  filter(cuenta > as.integer(vs_total * 0.1))
+
+
+dfgraph_top <- dfgraph %>%
+  group_by(año, gen) %>%
+  slice_max(order_by = cuenta, n = 2, with_ties = FALSE) %>%
+  ungroup()
+
+dfgraph_top$cambioAmino <- factor(
+  dfgraph_top$cambioAmino,
+  levels = unique(dfgraph_top$cambioAmino[order(-dfgraph_top$cuenta)])
+)
+
+
+ggplot(dfgraph_top, aes(x = cambioAmino, y = cuenta, fill = gen, label = cuenta)) +
+  geom_bar(stat = "identity") +
+  geom_text(stat = "identity", vjust = 1.5, size = 3) +
+  facet_wrap(~ año, scales = "free_x") +
+  ggtitle("Top 5 mutaciones no sinónimas por gen y por año") +
+  labs(x = "Cambio de aminoácido", y = "Frecuencia", fill = "Gen") +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+library(dplyr)
+library(ggplot2)
+
+# 1. Define grupos de genes
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1ab", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF10")
+
+# 2. Crea una nueva columna en tu data `datos` con el tipo de gen
+datos <- datos %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ "Otro"
+  ))
+
+# 3. Contar mutaciones no sinónimas por grupo y año
+resumen <- datos %>%
+  group_by(año, grupo) %>%
+  summarise(mutaciones = n(), .groups = "drop")
+
+# 4. Gráfica comparativa tipo informe
+ggplot(resumen, aes(x = factor(año), y = mutaciones, fill = grupo, label = mutaciones)) +
+  geom_col(position = "dodge") +
+  geom_text(position = position_dodge(0.9), vjust = -0.25, size = 4) +
+  labs(title = "Mutaciones no sinónimas por grupo de genes en Alfa (2020-2022)",
+       x = "Año", y = "Número de mutaciones", fill = "Tipo de gen") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+
+alfa <- datos
+alfa$variante <- "Alfa"
+
+```
+
+
+
+
+
+```{r}
+todo <- bind_rows(omicron, delta, alfa)
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1ab", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF10")
+
+todo <- todo %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ "Otro"
+  ))
+
+
+resumen_general <- todo %>%
+  group_by(variante, grupo) %>%
+  summarise(mutaciones = n(), .groups = "drop")
+
+library(ggplot2)
+
+ggplot(resumen_general, aes(x = variante, y = mutaciones, fill = grupo, label = mutaciones)) +
+  geom_col(position = "dodge") +
+  geom_text(position = position_dodge(0.9), vjust = -0.3, size = 4) +
+  labs(title = "Mutaciones no sinónimas por tipo de gen en variantes clave",
+       x = "Variante", y = "Cantidad de mutaciones", fill = "Grupo de genes") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+```
+```{r}
+# 1. Junta todos los datos sin importar variante
+todo <- bind_rows(omicron, delta, alfa)
+
+# 2. Clasifica los genes
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1ab", "ORF3a", "ORF6", "ORF7a", "ORF7b", "ORF8", "ORF10")
+
+todo <- todo %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ "Otro"
+  ))
+
+# 3. Agrupa por AÑO y GRUPO de gen
+resumen_anual <- todo %>%
+  group_by(año, grupo) %>%
+  summarise(mutaciones = n(), .groups = "drop")
+
+# 4. Gráfica por AÑO (ahora sí, no por variante)
+library(ggplot2)
+
+ggplot(resumen_anual, aes(x = factor(año), y = mutaciones, fill = grupo, label = mutaciones)) +
+  geom_col(position = "dodge") +
+  geom_text(position = position_dodge(0.9), vjust = -0.3, size = 4) +
+  labs(title = "Mutaciones no sinónimas por año y grupo de genes",
+       x = "Año", y = "Cantidad de mutaciones", fill = "Grupo de genes") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+library(knitr)
+kable(resumen_anual, caption = "Cantidad de mutaciones no sinónimas por grupo y año")
+```
+
+```{r}
+library(ggplot2)
+
+# Calcular proporciones
+resumen_pie <- resumen_anual %>%
+  group_by(año) %>%
+  mutate(pct = mutaciones / sum(mutaciones) * 100,
+         etiqueta = paste0(grupo, "\n", round(pct, 1), "%"))
+
+# Pie por año (facet)
+ggplot(resumen_pie, aes(x = "", y = pct, fill = grupo)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  facet_wrap(~ año) +
+  geom_text(aes(label = etiqueta), position = position_stack(vjust = 0.5), size = 4) +
+  labs(title = "Proporción de mutaciones por grupo de genes (por año)", fill = "Grupo") +
+  theme_void(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+```
+
+```{r}
+ggplot(resumen_anual, aes(x = año, y = mutaciones, color = grupo)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(title = "Tendencia de mutaciones no sinónimas por grupo de genes (2021–2024)",
+       x = "Año", y = "Cantidad de mutaciones", color = "Grupo de genes") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+```
+
+```{r}
+longitudes_df <- data.frame(
+  gen = sapply(file, function(x) {
+    info <- attr(x, "Annot")
+    info <- unlist(strsplit(info, "\\[|\\]|:|=|\\.|\\s"))
+    gen_name <- info[which(info == "gene") + 1]
+    toupper(gen_name)
+  }),
+  longitud = sapply(file, length),
+  stringsAsFactors = FALSE
+)
+
+library(dplyr)
+
+# Filtrar y agrupar en un solo paso
+longitudes_df <- longitudes_df %>%
+  filter(!is.na(gen), gen != "") %>%
+  group_by(gen) %>%
+  summarise(longitud = max(longitud), .groups = "drop")
+
+# Verificar coincidencias con el conteo
+unique(longitudes_df$gen)
+setdiff(unique(conteo$gen), longitudes_df$gen)
+
+```
+
+```{r}
+# Calcular densidad por gen
+densidad <- conteo %>%
+  left_join(longitudes_df, by = "gen") %>%
+  mutate(densidad = muts / longitud)
+
+# Clasificar grupo de genes
+genes_estructurales <- c("S", "N", "M", "E")
+genes_no_estructurales <- c("ORF1AB", "ORF3A", "ORF6", "ORF7A", "ORF7B", "ORF8", "ORF10")
+
+densidad <- densidad %>%
+  mutate(grupo = case_when(
+    gen %in% genes_estructurales ~ "Estructural",
+    gen %in% genes_no_estructurales ~ "No estructural",
+    TRUE ~ NA_character_
+  )) %>%
+  filter(!is.na(grupo))
+
+# Calcular densidad promedio por grupo y año
+densidad_promedio <- densidad %>%
+  group_by(año, grupo) %>%
+  summarise(densidad_prom = mean(densidad), .groups = "drop")
+
+# Gráfica final
+ggplot(densidad_promedio, aes(x = año, y = densidad_prom * 1000, color = grupo)) +
+  geom_line(size = 1.3) +
+  geom_point(size = 3) +
+  labs(title = "Densidad promedio de mutaciones no sinónimas por grupo (por 1000 nt)",
+       x = "Año", y = "Mutaciones por mil nucleótidos", color = "Grupo") +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+table(densidad$año)
+
+```
+
+```{r}
+ggplot(densidad %>% group_by(año, grupo) %>%
+         summarise(densidad_prom = mean(densidad), .groups = "drop"),
+       aes(x = año, y = densidad_prom, color = grupo)) +
+  geom_line(size = 1.3) +
+  geom_point(size = 3) +
+  labs(title = "Densidad de mutaciones no sinónimas por grupo (ajustada por longitud)",
+       x = "Año", y = "Mutaciones por nucleótido", color = "Grupo") +
+  theme_minimal(base_size = 14)
+```
+
