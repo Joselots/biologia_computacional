@@ -733,7 +733,7 @@ ggplot(conteo_con_long, aes(x = gen, y = densidad, fill = factor(año), label = 
     panel.grid.major.y = element_line(color = "gray85"),
     panel.grid.minor.y = element_blank()
   ) +
-  coord_cartesian(ylim = c(0, 1.8))  # 🔥 Aquí limitas visualmente para que ORF8 no lo arruine
+  coord_cartesian(ylim = c(0, 7))  # 🔥 Aquí limitas visualmente para que ORF8 no lo arruine
 
 
 conteo_con_long$grupo <- ifelse(
@@ -795,7 +795,7 @@ ggplot(densidad_grupo, aes(x = factor(año), y = densidad_prom, fill = grupo, la
     legend.title = element_text(face = "bold"),
     legend.position = "right"
   ) +
-  coord_cartesian(ylim = c(0, 2))  # 🔧 Ajusta si ves que hay un pico muy alto
+  coord_cartesian(ylim = c(0, 7)) 
 
 ```
 
